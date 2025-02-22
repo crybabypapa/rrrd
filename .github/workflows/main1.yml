@@ -1,0 +1,60 @@
+name: Playit RDP Tunnel with Windows 11
+
+on:
+  workflow_dispatch:
+
+jobs:
+  setup-rdp-tunnel:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check out the repository
+      uses: actions/checkout@v2
+
+    - name: Set Up Docker
+      run: |
+        sudo apt update
+        sudo apt install -y docker.io docker-compose
+        sudo systemctl start docker
+        sudo systemctl enable docker
+
+    - name: Create Docker Compose File
+      run: |
+        cat <<EOF > windows11.yml
+        services:
+          windows:
+            image: dockurr/windows
+            container_name: windows
+            environment:
+              VERSION: "11"
+              USERNAME: "MASTER"
+              PASSWORD: "admin@123"
+              RAM_SIZE: "Max"  # Use maximum allowed RAM size
+              CPU_CORES: "Max"  # Use maximum allowed CPU cores
+              DISK_SIZE: "400G"
+              DISK2_SIZE: "100G"
+            devices:         
+              - /dev/kvm
+              - /dev/net/tun
+            cap_add:
+              - NET_ADMIN
+            ports:
+              - "8006:8006"
+              - "3389:3389/tcp"
+              - "3389:3389/udp"
+            stop_grace_period: 2m
+        EOF
+
+    - name: Start Windows 11 Container
+      run: |
+        sudo docker-compose -f windows11.yml up -d
+
+    - name: Download and Install Playit
+      run: |
+        curl -L -o playit-linux https://github.com/playit-cloud/playit-agent/releases/download/v0.15.26/playit-linux-x86_64
+        chmod +x playit-linux
+        ./playit-linux --secret 3ecc7f9c1cb0cf0849d8aab4c3ad350d02cf125be4c5dee1f0e76198ff877d33 &
+
+    - name: Keep the GitHub Action Runner Alive
+      run: |
+        sleep 11800  # Adjust the duration based on your needs
