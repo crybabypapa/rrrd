@@ -5,7 +5,7 @@ on:
 
 jobs:
   setup-rdp-tunnel:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
 
     steps:
     - name: Check out the repository
@@ -14,11 +14,11 @@ jobs:
     - name: Install QEMU and Required Packages
       run: |
         sudo apt update
-        sudo apt install -y qemu qemu-kvm libvirt-daemon-system libvirt-clients bridge-utils virt-manager
+        sudo apt install -y qemu qemu-kvm libvirt-daemon-system libvirt-clients bridge-utils virt-manager wget
 
     - name: Create VM Disk Image
       run: |
-        qemu-img create -f qcow2 windows11.qcow2 60G
+        qemu-img create -f qcow2 windows11.qcow2 20G
 
     - name: Download Windows 11 ISO
       run: |
@@ -32,8 +32,8 @@ jobs:
         # Define variables
         ISO_PATH="./windows11.iso"
         DISK_PATH="./windows11.qcow2"
-        RAM_SIZE="\$(grep MemTotal /proc/meminfo | awk '{print \$2}')K"
-        CPU_CORES="\$(nproc)"
+        RAM_SIZE="4G"
+        CPU_CORES="2"
 
         # Run QEMU
         qemu-system-x86_64 \\
@@ -61,13 +61,6 @@ jobs:
         curl -L -o playit-linux https://github.com/playit-cloud/playit-agent/releases/download/v0.15.26/playit-linux-x86_64
         chmod +x playit-linux
         ./playit-linux --secret 3ecc7f9c1cb0cf0849d8aab4c3ad350d02cf125be4c5dee1f0e76198ff877d33 &
-
-    - name: Enable and Start RDP Server
-      run: |
-        powershell.exe -Command "Set-ItemProperty -Path 'HKLM:\\System\\CurrentControlSet\\Control\\Terminal Server' -Name 'fDenyTSConnections' -Value 0"
-        powershell.exe -Command "Enable-NetFirewallRule -DisplayGroup 'Remote Desktop'"
-        powershell.exe -Command "Set-ItemProperty -Path 'HKLM:\\System\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp' -Name 'UserAuthentication' -Value 1"
-        powershell.exe -Command "Set-LocalUser -Name 'runneradmin' -Password (ConvertTo-SecureString -AsPlainText 'admin@123' -Force)"
 
     - name: Keep the GitHub Action Runner Alive
       run: |
