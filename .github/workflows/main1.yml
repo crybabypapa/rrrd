@@ -5,70 +5,31 @@ on:
 
 jobs:
   setup-rdp-tunnel:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
     - name: Check out the repository
       uses: actions/checkout@v2
 
-    - name: Install QEMU and Required Packages
-      run: |
-        sudo apt update
-        sudo apt install -y qemu-system-x86 qemu-kvm libvirt-daemon-system libvirt-clients bridge-utils virt-manager
-
-    - name: Create VM Disk Image
-      run: |
-        qemu-img create -f qcow2 windows11.qcow2 60G
-
-    - name: Download Windows 11 ISO
-      run: |
-        wget -O windows11.iso https://software-download.microsoft.com/db/Win11_English_x64.iso
-
-    - name: Create Script to Run QEMU with Windows 11
-      run: |
-        cat <<EOF > run_windows11.sh
-        #!/bin/bash
-
-        # Define variables
-        ISO_PATH="./windows11.iso"
-        DISK_PATH="./windows11.qcow2"
-        RAM_SIZE="\$(grep MemTotal /proc/meminfo | awk '{print \$2}')K"
-        CPU_CORES="\$(nproc)"
-
-        # Run QEMU
-        qemu-system-x86_64 \\
-            -m \${RAM_SIZE} \\
-            -smp \${CPU_CORES} \\
-            -boot d \\
-            -cdrom \${ISO_PATH} \\
-            -drive file=\${DISK_PATH},if=virtio \\
-            -net nic -net user,hostfwd=tcp::3389-:3389 \\
-            -vga std \\
-            -device virtio-balloon \\
-            -vnc :1
-        EOF
-
-    - name: Make Script Executable
-      run: |
-        chmod +x run_windows11.sh
-
-    - name: Start the VM
-      run: |
-        ./run_windows11.sh &
-
     - name: Download and Install Playit
       run: |
-        curl -L -o playit-linux https://github.com/playit-cloud/playit-agent/releases/download/v0.15.26/playit-linux-x86_64
-        chmod +x playit-linux
-        ./playit-linux --secret 3ecc7f9c1cb0cf0849d8aab4c3ad350d02cf125be4c5dee1f0e76198ff877d33 &
+        Invoke-WebRequest -Uri "https://github.com/playit-cloud/playit-agent/releases/download/v0.15.26/playit-windows-x86_64-signed.exe" -OutFile "$env:USERPROFILE\playit.exe"
+        Start-Sleep -Seconds 5  # Give some time for the download to complete
 
-    - name: Enable and Start RDP Server
+    - name: Enable RDP
       run: |
-        powershell.exe -Command "Set-ItemProperty -Path 'HKLM:\\System\\CurrentControlSet\\Control\\Terminal Server' -Name 'fDenyTSConnections' -Value 0"
-        powershell.exe -Command "Enable-NetFirewallRule -DisplayGroup 'Remote Desktop'"
-        powershell.exe -Command "Set-ItemProperty -Path 'HKLM:\\System\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp' -Name 'UserAuthentication' -Value 1"
-        powershell.exe -Command "Set-LocalUser -Name 'runneradmin' -Password (ConvertTo-SecureString -AsPlainText 'admin@123' -Force)"
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name 'fDenyTSConnections' -Value 0
+        Enable-NetFirewallRule -DisplayGroup 'Remote Desktop'
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name 'UserAuthentication' -Value 1
+        Set-LocalUser -Name 'runneradmin' -Password (ConvertTo-SecureString -AsPlainText 'admin@123' -Force)
+
+    - name: Start Playit and Set Up RDP Tunnel
+      env:
+        PLAYIT_AUTH_KEY: b9825403aa7f49158a65bc4aff04406238b1b7d5ea0c50a84bcd13ac486e432f
+      run: |
+        Start-Process -FilePath "$env:USERPROFILE\playit.exe" -ArgumentList "--secret $env:PLAYIT_AUTH_KEY" -NoNewWindow -Wait
+        Start-Process -FilePath "$env:USERPROFILE\playit.exe" -NoNewWindow
 
     - name: Keep the GitHub Action Runner Alive
       run: |
-        sleep 11800  # Adjust the duration based on your needs
+        Start-Sleep -Seconds 11800  # Adjust the duration based on your needs
