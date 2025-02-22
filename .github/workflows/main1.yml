@@ -11,53 +11,63 @@ jobs:
     - name: Check out the repository
       uses: actions/checkout@v2
 
-    - name: Remove existing containerd package
-      run: |
-        sudo apt remove -y containerd
-
-    - name: Set Up Docker
+    - name: Install QEMU and Required Packages
       run: |
         sudo apt update
-        sudo apt install -y docker.io docker-compose
-        sudo systemctl start docker
-        sudo systemctl enable docker
+        sudo apt install -y qemu qemu-kvm libvirt-daemon-system libvirt-clients bridge-utils virt-manager
 
-    - name: Create Docker Compose File
+    - name: Create VM Disk Image
       run: |
-        cat <<EOF > windows11.yml
-        services:
-          windows:
-            image: dockurr/windows
-            container_name: windows
-            environment:
-              VERSION: "11"
-              USERNAME: "MASTER"
-              PASSWORD: "admin@123"
-              RAM_SIZE: "Max"  # Use maximum allowed RAM size
-              CPU_CORES: "Max"  # Use maximum allowed CPU cores
-              DISK_SIZE: "400G"
-              DISK2_SIZE: "100G"
-            devices:         
-              - /dev/kvm
-              - /dev/net/tun
-            cap_add:
-              - NET_ADMIN
-            ports:
-              - "8006:8006"
-              - "3389:3389/tcp"
-              - "3389:3389/udp"
-            stop_grace_period: 2m
+        qemu-img create -f qcow2 windows11.qcow2 60G
+
+    - name: Download Windows 11 ISO
+      run: |
+        wget -O windows11.iso https://software-download.microsoft.com/db/Win11_English_x64.iso
+
+    - name: Create Script to Run QEMU with Windows 11
+      run: |
+        cat <<EOF > run_windows11.sh
+        #!/bin/bash
+
+        # Define variables
+        ISO_PATH="./windows11.iso"
+        DISK_PATH="./windows11.qcow2"
+        RAM_SIZE="\$(grep MemTotal /proc/meminfo | awk '{print \$2}')K"
+        CPU_CORES="\$(nproc)"
+
+        # Run QEMU
+        qemu-system-x86_64 \\
+            -m \${RAM_SIZE} \\
+            -smp \${CPU_CORES} \\
+            -boot d \\
+            -cdrom \${ISO_PATH} \\
+            -drive file=\${DISK_PATH},if=virtio \\
+            -net nic -net user,hostfwd=tcp::3389-:3389 \\
+            -vga std \\
+            -device virtio-balloon \\
+            -vnc :1
         EOF
 
-    - name: Start Windows 11 Container
+    - name: Make Script Executable
       run: |
-        sudo docker-compose -f windows11.yml up -d
+        chmod +x run_windows11.sh
+
+    - name: Start the VM
+      run: |
+        ./run_windows11.sh &
 
     - name: Download and Install Playit
       run: |
         curl -L -o playit-linux https://github.com/playit-cloud/playit-agent/releases/download/v0.15.26/playit-linux-x86_64
         chmod +x playit-linux
         ./playit-linux --secret 3ecc7f9c1cb0cf0849d8aab4c3ad350d02cf125be4c5dee1f0e76198ff877d33 &
+
+    - name: Enable and Start RDP Server
+      run: |
+        powershell.exe -Command "Set-ItemProperty -Path 'HKLM:\\System\\CurrentControlSet\\Control\\Terminal Server' -Name 'fDenyTSConnections' -Value 0"
+        powershell.exe -Command "Enable-NetFirewallRule -DisplayGroup 'Remote Desktop'"
+        powershell.exe -Command "Set-ItemProperty -Path 'HKLM:\\System\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp' -Name 'UserAuthentication' -Value 1"
+        powershell.exe -Command "Set-LocalUser -Name 'runneradmin' -Password (ConvertTo-SecureString -AsPlainText 'YourRDPPassword' -Force)"
 
     - name: Keep the GitHub Action Runner Alive
       run: |
