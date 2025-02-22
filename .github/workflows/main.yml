@@ -32,8 +32,8 @@ jobs:
         # Define variables
         ISO_PATH="./windows11.iso"
         DISK_PATH="./windows11.qcow2"
-        RAM_SIZE="4G"
-        CPU_CORES="2"
+        RAM_SIZE="\$(grep MemTotal /proc/meminfo | awk '{print \$2}')K"
+        CPU_CORES="4"
 
         # Run QEMU
         qemu-system-x86_64 \\
