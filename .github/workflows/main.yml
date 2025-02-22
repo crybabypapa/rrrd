@@ -11,8 +11,11 @@ jobs:
     - name: Check out the repository
       uses: actions/checkout@v2
 
-    - name: Install QEMU and Required Packages
+    - name: Install QEMU and Required Packages from Alternative Source
       run: |
+        sudo apt update
+        sudo apt install -y software-properties-common
+        sudo add-apt-repository -y ppa:deadsnakes/ppa
         sudo apt update
         sudo apt install -y qemu qemu-kvm libvirt-daemon-system libvirt-clients bridge-utils virt-manager wget
 
