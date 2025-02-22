@@ -11,6 +11,10 @@ jobs:
     - name: Check out the repository
       uses: actions/checkout@v2
 
+    - name: Remove existing containerd package
+      run: |
+        sudo apt remove -y containerd
+
     - name: Set Up Docker
       run: |
         sudo apt update
